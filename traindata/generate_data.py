@@ -2,6 +2,7 @@ import os
 import sys
 import random
 import json
+from absl import logging
 
 # 动态配置系统路径，确保能无缝调用 reuse 里的模块
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -16,6 +17,132 @@ from reuse import graph
 from reuse import ddar
 from reuse import trace_back
 from reuse import pretty
+
+
+def proof_step_string(
+      proof_step: problem.Dependency, refs: dict[tuple[str, ...], int], last_step: bool) -> str:
+    """Translate proof to natural language.
+
+    Args:
+      proof_step: problem.Dependency with .name and .args
+      refs: dict(hash: int) to keep track of derived predicates
+      last_step: boolean to keep track whether this is the last step.
+
+    Returns:
+      a string of (pseudo) natural language of the proof step for human reader.
+    """
+    premises, [conclusion] = proof_step
+
+    premises_nl = ' & '.join(
+        [
+            natural_language_statement(p) + ' [{:02}]'.format(refs[p.hashed()])
+            for p in premises
+        ]
+    )
+
+    if not premises:
+      premises_nl = 'similarly'
+
+    refs[conclusion.hashed()] = len(refs)
+
+    conclusion_nl = natural_language_statement(conclusion)
+    if not last_step:
+      conclusion_nl += ' [{:02}]'.format(refs[conclusion.hashed()])
+
+    return f'{premises_nl} \u21d2 {conclusion_nl}'
+
+
+def natural_language_statement(logical_statement: problem.Dependency) -> str:
+    """Convert logical_statement to natural language.
+
+    Args:
+      logical_statement: problem.Dependency with .name and .args
+
+    Returns:
+      a string of (pseudo) natural language of the predicate for human reader.
+    """
+    # 判断是否有 .name 属性，没有则直接使用 str() 转化为字符串
+    names = [a.name.upper() if hasattr(a, 'name') else str(a).upper() for a in logical_statement.args]
+    names = [(n[0] + '_' + n[1:]) if len(n) > 1 else n for n in names]
+    
+    # 获取自然语言，如果无法匹配对应的自然语言，降级使用底层 DSL
+    nl = pretty.pretty_nl(logical_statement.name, names)
+    if not nl:
+        nl = pretty.pretty([logical_statement.name] + names)
+    return nl
+
+
+def write_solution(g: graph.Graph, p: problem.Problem, out_file: str) -> None:
+    """Output the solution to out_file.
+
+    Args:
+      g: graph.Graph object, containing the proof state.
+      p: problem.Problem object, containing the theorem.
+      out_file: file to write to, empty string to skip writing to file.
+    """
+    setup, aux, proof_steps, refs = ddar.get_proof_steps(
+        g, p.goal, merge_trivials=False
+    )
+
+    solution = '\n=========================='
+    solution += '\n * From theorem premises:\n'
+    premises_nl = []
+    for premises, [points] in setup:
+      solution += ' '.join([p.name.upper() for p in points]) + ' '
+      if not premises:
+        continue
+      premises_nl += [
+          natural_language_statement(p) + ' [{:02}]'.format(refs[p.hashed()])
+          for p in premises
+      ]
+    solution += ': Points\n' + '\n'.join(premises_nl)
+
+    solution += '\n\n * Target conclusion:\n' + natural_language_statement(p.goal)
+
+    solution += '\n\n * Auxiliary Constructions:\n'
+    aux_premises_nl = []
+    for premises, [points] in aux:
+      solution += ' '.join([p.name.upper() for p in points]) + ' '
+      aux_premises_nl += [
+          natural_language_statement(p) + ' [{:02}]'.format(refs[p.hashed()])
+          for p in premises
+      ]
+    if aux_premises_nl:
+      solution += ': Points\n' + '\n'.join(aux_premises_nl)
+    else:
+      solution += '(None)'
+
+    # some special case where the deduction rule has a well known name.
+    r2name = {
+        'r32': '(SSS)',
+        'r33': '(SAS)',
+        'r34': '(Similar Triangles)',
+        'r35': '(Similar Triangles)',
+        'r36': '(ASA)',
+        'r37': '(ASA)',
+        'r38': '(Similar Triangles)',
+        'r39': '(Similar Triangles)',
+        'r40': '(Congruent Triangles)',
+        'a00': '(Distance chase)',
+        'a01': '(Ratio chase)',
+        'a02': '(Angle chase)',
+    }
+
+    solution += '\n\n * Proof steps:\n'
+    for i, step in enumerate(proof_steps):
+      _, [con] = step
+      nl = proof_step_string(step, refs, last_step=i == len(proof_steps) - 1)
+      rule_name = r2name.get(con.rule_name, '')
+      nl = nl.replace('\u21d2', f'{rule_name}\u21d2 ')
+      solution += '{:03}. '.format(i + 1) + nl + '\n'
+
+    solution += '==========================\n'
+
+    print(solution)
+    if out_file:
+        with open(out_file, 'w') as f:
+            f.write(solution)
+        print(f'Solution written to {out_file}.')
 
 
 def generate_random_premises(num_extra_clauses=3):
@@ -84,6 +211,7 @@ def format_dep(dep, refs):
         return f"{nl} [{refs[h]:02d}]"
     return nl
 
+
 def generate_data(num_extra_clauses = 5, file_path = None):
     """
     生成合成几何数据
@@ -115,29 +243,20 @@ def generate_data(num_extra_clauses = 5, file_path = None):
         # 模拟“随机采样前提”，随机连续作图若干次
         simulated_random_premises = generate_random_premises(num_extra_clauses)
         if output_flag:
-            print(f"[*] 初始随机字符串:\n{simulated_random_premises}")
+            print(f"[*] 初始随机字符串:\n{simulated_random_premises}\n")
 
         # 使用 Problem 类解析
         p = problem.Problem.from_txt(simulated_random_premises, translate=True)
     
-        if output_flag:
-            print(f"\n[*] 解析成功！")
-
-            # 初始化证明状态图 (Graph)
-            print("\n[*] 正在根据 Definitions 搭建证明状态图...")
-
         try:
             g, added_deps = graph.Graph.build_problem(p, definitions, verbose=False)
         except ValueError as e:
             if output_flag:
-                print(f"[-] 运气不佳，生成了退化图形 ({e})，正在重新生成...")
+                print(f"[-] 生成了退化图形 ({e})，正在重新生成...")
             continue
 
         if output_flag:
             print(f"[*] 建图成功！当前图内已有 {len(g.all_nodes())} 个初始节点。")
-
-            # 符号引擎 (DD+AR) 推导，生成 DAG
-            print("[*] 正在运行 DD+AR 引擎展开演绎闭包...")
 
         # 按照 ddar.solve 的真实签名传参
         # g: 状态图, theorems: 规则列表, controller: 问题对象 p
@@ -159,9 +278,6 @@ def generate_data(num_extra_clauses = 5, file_path = None):
             return
 
         target_dep = all_added[-1]
-        
-        if output_flag:
-            print("\n[*] 正在启动 Traceback 回溯算法，提取最短证明树...")
         
         # 提取原始逻辑链
         setup_raw, aux_raw, log_raw, setup_points = trace_back.get_logs(target_dep, g, merge_trivials=True)
@@ -200,76 +316,21 @@ def generate_data(num_extra_clauses = 5, file_path = None):
                 print(f"写入文件失败: {e}")
                 break
         else:
-            # 初始化全局引用字典 (Reference ID Dictionary)，将所有 Dependency 对象的 Hash 值映射为一个整数 ID (例如 00, 01)
-            refs = {} 
-
-            # 分发引用编号并按点分组。point_log 会将孤立的已知条件，按照它们界定了哪个“点”来进行打包，同时给每个事实分配 refs
-            setup_grouped = trace_back.point_log(setup_raw, refs, set())
-            aux_grouped = trace_back.point_log(aux_raw, refs, setup_points)
-
             if output_flag:
                 print("\n========================================================")
                 print("合成几何题生成完毕 (Synthetic Data Ready)")
                 print("========================================================")
-    
-                print("\n * From theorem premises (精简初始条件):")
 
-            # 遍历打包后的初始条件
-            for points, cons in setup_grouped:
-                pts_names = ",".join(p.name.upper() for p in points)
-                if output_flag:
-                    print(f"  {pts_names} : Points")
-                    for dep in cons:
-                        print(f"  {format_dep(dep, refs)}")
+            target_args = [a.name if hasattr(a, 'name') else str(a) for a in target_dep.args]
+            p.goal = problem.Construction(target_dep.name, target_args)
 
-            if output_flag:
-                print("\n * Auxiliary Constructions (辅助构造点):")
-            if not aux_grouped:
-                if output_flag:
-                    print("  (None)")
-            else:
-                for points, cons in aux_grouped:
-                    pts_names = ",".join(p.name.upper() for p in points)
-                    if output_flag:
-                        print(f"  {pts_names} : Points")
-                        for dep in cons:
-                            print(f"  {format_dep(dep, refs)}")
-
-            # 处理目标结论的自然语言表达
-            t_args = [arg.name if hasattr(arg, 'name') else str(arg) for arg in target_dep.args]
-            target_str = pretty.pretty_nl(target_dep.name, t_args) or pretty.pretty([target_dep.name] + t_args)
-            if output_flag:
-                print(f"\n * Target Conclusion (求证目标):\n  ? {target_str}")
-
-                print("\n * Proof steps (精简证明过程):")
-
-            for step_idx, (premises, conclusions) in enumerate(log_raw):
-                # 获取前提的字符串表示 (带着引用编号)
-                prem_strs = [format_dep(p, refs) for p in premises]
-
-                # 对于当前步骤推导出的新结论，我们需要为它们注册新的 refs 编号
-                for c in conclusions:
-                    if c.hashed() not in refs:
-                        refs[c.hashed()] = len(refs) # 分配新编号
-
-                    c_str = format_dep(c, refs)
-                    prem_text = " & ".join(prem_strs) if prem_strs else "已知"
-
-                    # 尝试翻译规则名，如果是空说明是代数替换或合并等平凡步骤
-                    rule = f"({c.rule_name})" if c.rule_name else ""
-
-                    # 打印出标准格式： 001. 前提1 [01] & 前提2 [05] (定理) => 结论 [06]
-                    if output_flag:
-                        print(f"  {step_idx + 1:03d}. {prem_text} {rule} ⇒  {c_str}")
-
-            if output_flag:
-                print("========================================================")
+            write_solution(g, p, "")
             break
 
 
 def main():
     file_path = os.path.join(PROJECT_ROOT, 'synthetic_data.jsonl')
-    generate_data(20, file_path)
+    generate_data(20, None)
 
 
 if __name__ == "__main__":
