@@ -2,6 +2,7 @@ import os
 import sys
 import random
 import json
+import multiprocessing
 from absl import logging
 
 # 动态配置系统路径，确保能无缝调用 reuse 里的模块
@@ -210,21 +211,15 @@ def generate_random_premises(num_extra_clauses = 3, dof_chooser = 0.7):
     return f"synthetic_random_graph\n{premises_str}"
 
 
-def generate_data(syn_data_index, num_extra_clauses = 5, dof_chooser = 0.7, num_targets = 3, file_path = None):
+def generate_data(num_extra_clauses = 5, dof_chooser = 0.7, num_targets = 3, output_flag = True):
     """
     生成合成几何数据
-    :param syn_data_index: 生成数据的索引
     :param num_extra_clauses: 额外添加的随机前提数量
     :param dof_chooser: 选择 0dof 作图的概率，剩余概率为 1dof 作图
     :param num_targets: 随机选择以进行回溯的目标结论数量
-    :param file_path: 可选参数，指定将生成的数据保存到哪个文件
+    :param output_flag: 是否输出没有辅助点构造的证明
     """
-    output_flag = True
-    if file_path is not None:
-        output_flag = False
-
-    if output_flag:
-        print("=== 启动 AlphaGeometry 微型数据生成器 ===")
+    print("=== 启动 AlphaGeometry 微型数据生成器 ===")
 
     # 加载几何定义和推理规则
     defs_path = os.path.join(PROJECT_ROOT, 'defs.txt')
@@ -238,30 +233,26 @@ def generate_data(syn_data_index, num_extra_clauses = 5, dof_chooser = 0.7, num_
 
     while True:
         generation_attempts += 1
-        if output_flag:
-            print(f"\n=== 第 {generation_attempts} 次随机前提生成尝试 ===")
+        print(f"\n=== 第 {generation_attempts} 次随机前提生成尝试 ===")
 
         # 模拟“随机采样前提”，随机连续作图若干次
         simulated_random_premises = generate_random_premises(num_extra_clauses, dof_chooser)
-        if output_flag:
-            print(f"[*] 初始随机字符串:\n{simulated_random_premises}\n")
+        print(f"[*] 初始随机字符串:\n{simulated_random_premises}\n")
 
         # 使用 Problem 类解析
         try:
             p = problem.Problem.from_txt(simulated_random_premises, translate=True)
         except Exception as e:
-            if output_flag: print(f"[-] 字符串解析失败 ({e})，正在重新生成...")
+            print(f"[-] 字符串解析失败 ({e})，正在重新生成...")
             continue
     
         try:
             g, added_deps = graph.Graph.build_problem(p, definitions, verbose=False)
         except Exception as e:
-            if output_flag:
-                print(f"[-] 生成了退化图形 ({e})，正在重新生成...")
+            print(f"[-] 生成了退化图形 ({e})，正在重新生成...")
             continue
 
-        if output_flag:
-            print(f"[*] 建图成功！当前图内已有 {len(g.all_nodes())} 个初始节点。")
+        print(f"[*] 建图成功！当前图内已有 {len(g.all_nodes())} 个初始节点。")
 
         try:
             # 按照 ddar.solve 的真实签名传参
@@ -275,60 +266,34 @@ def generate_data(syn_data_index, num_extra_clauses = 5, dof_chooser = 0.7, num_
                 timeout=60
             )
         except Exception as e:
-            if output_flag: print(f"[-] 符号演绎阶段异常 ({e})，已拦截...")
+            print(f"[-] 符号演绎阶段异常 ({e})，已拦截...")
             continue
 
-        if output_flag:
-            print(f"[*] 推导完成！图中当前共有 {len(g.all_nodes())} 个几何结论节点。")
+        print(f"[*] 推导完成！图中当前共有 {len(g.all_nodes())} 个几何结论节点。")
 
         if not all_added:
-            if output_flag:
-                print("[-] 初始条件太简单")
+            print("[-] 初始条件太简单")
             return
 
         # target_dep = all_added[-1]
         actual_num_targets = min(num_targets, len(all_added))
         sampled_targets = random.sample(all_added, actual_num_targets)
         valid_samples_for_this_graph = 0
-        if output_flag:
-            print(f"[*] 图构建与推导成功！从 {len(all_added)} 个新结论中随机抽取了 {actual_num_targets} 个作为求证目标。")
+        print(f"[*] 图构建与推导成功！从 {len(all_added)} 个新结论中随机抽取了 {actual_num_targets} 个作为求证目标。")
 
         for i, target_dep in enumerate(sampled_targets):
-            if output_flag:
-                print(f"\n--- 开始处理目标 {i+1}/{actual_num_targets} ---")
+            print(f"\n--- 开始处理目标 {i+1}/{actual_num_targets} ---")
 
             try:
                 # 借助 g.cache，即使处理多个目标，回溯速度也会越来越快
                 setup_raw, aux_raw, log_raw, setup_points = trace_back.get_logs(target_dep, g, merge_trivials=True)
             except Exception as e:
-                if output_flag: print(f"  [-] 回溯树构建异常 ({e})，跳过该结论...")
+                print(f"  [-] 回溯树构建异常 ({e})，跳过该结论...")
                 continue
 
-            if file_path is not None and len(aux_raw) == 0:
-                if output_flag: print("  [-] 该结论无需辅助点即可证明，跳过...")
+            if output_flag is False and len(aux_raw) == 0:
+                print("  [-] 该结论无需辅助点即可证明，跳过...")
                 continue 
-
-            if file_path is not None:
-                setup_dsl = [pretty.pretty([dep.name] + [a.name if hasattr(a, 'name') else str(a) for a in dep.args]) for dep in setup_raw]
-                target_args = [a.name if hasattr(a, 'name') else str(a) for a in target_dep.args]
-                target_dsl = pretty.pretty([target_dep.name] + target_args)
-                aux_dsl = [pretty.pretty([dep.name] + [a.name if hasattr(a, 'name') else str(a) for a in dep.args]) for dep in aux_raw]
-
-                training_sample = {
-                    "problem_id": f"synthetic_{syn_data_index:06d}", # 加上后缀区分同源图
-                    "premises": setup_dsl,        
-                    "target": target_dsl,         
-                    "auxiliary_points": aux_dsl,  
-                    "proof_length": len(log_raw)  
-                }
-                syn_data_index += 1
-
-                try:
-                    with open(file_path, 'a', encoding='utf-8') as f:
-                        f.write(json.dumps(training_sample, ensure_ascii=False) + '\n')
-                    valid_samples_for_this_graph += 1
-                except Exception as e:
-                    print(f"写入文件失败: {e}")
             else:
                 if output_flag:
                     print("\n========================================================")
@@ -354,27 +319,119 @@ def generate_data(syn_data_index, num_extra_clauses = 5, dof_chooser = 0.7, num_
                 print(f"本轮测试结束，共成功展示了 {valid_samples_for_this_graph} 个包含证明链的结论。")
                 print(f"========================================================")
             break
-    return syn_data_index
+
+
+def worker_generate_single_graph(args):
+    """
+    Worker 函数：在一个独立的进程中运行，直到成功生成一张有效图的数据并返回。
+    """
+    num_extra_clauses, dof_chooser, num_targets, task_id = args
+
+    defs_path = os.path.join(PROJECT_ROOT, 'defs.txt')
+    rules_path = os.path.join(PROJECT_ROOT, 'rules.txt')
+    definitions = problem.Definition.from_txt_file(defs_path, to_dict=True)
+    theorems = problem.Theorem.from_txt_file(rules_path, to_dict=True)
+
+    while True:
+        simulated_random_premises = generate_random_premises(num_extra_clauses, dof_chooser)
+        
+        try:
+            p = problem.Problem.from_txt(simulated_random_premises, translate=True)
+            g, added_deps = graph.Graph.build_problem(p, definitions, verbose=False)
+            
+            # 限制 timeout 为 10 秒，防止某个死角图形卡死整个进程
+            g, level_times, status, branches, all_added = ddar.solve(
+                g, theorems, controller=p, max_level=1000, timeout=20
+            )
+        except Exception:
+            continue
+
+        if not all_added:
+            continue
+
+        actual_num_targets = min(num_targets, len(all_added))
+        sampled_targets = random.sample(all_added, actual_num_targets)
+
+        results = []
+        for i, target_dep in enumerate(sampled_targets):
+            try:
+                setup_raw, aux_raw, log_raw, setup_points = trace_back.get_logs(target_dep, g, merge_trivials=True)
+            except Exception:
+                continue
+
+            # 寻找包含辅助点的数据
+            if len(aux_raw) == 0:
+                continue 
+
+            setup_dsl = [pretty.pretty([dep.name] + [a.name if hasattr(a, 'name') else str(a) for a in dep.args]) for dep in setup_raw]
+            target_args = [a.name if hasattr(a, 'name') else str(a) for a in target_dep.args]
+            target_dsl = pretty.pretty([target_dep.name] + target_args)
+            aux_dsl = [pretty.pretty([dep.name] + [a.name if hasattr(a, 'name') else str(a) for a in dep.args]) for dep in aux_raw]
+
+            training_sample = {
+                "problem_id": f"synthetic_{task_id}_{random.randint(0, 99999):05d}_{i}",
+                "premises": setup_dsl,        
+                "target": target_dsl,         
+                "auxiliary_points": aux_dsl,  
+                "proof_length": len(log_raw)  
+            }
+            results.append(training_sample)
+
+        # 只要成功拿到了哪怕一条有效数据，就退出 while 循环，返回给主进程
+        if len(results) > 0:
+            return results
 
 
 def main():
-    syn_data_index = 0
-    num_extra_clauses = 15
+    num_extra_clauses = 20
     dof_chooser = 0.5
     num_targets = 30
-    file_path = os.path.join(PROJECT_ROOT, 'synthetic_data.jsonl')
-    sum_syn_data = 1
+    output_flag = True
+    file_path = os.path.join(PROJECT_ROOT, 'traindata/synthetic_data.jsonl')
 
-    while syn_data_index < sum_syn_data:
-        syn_data_index = generate_data(
-            syn_data_index,
-            num_extra_clauses,
-            dof_chooser,
-            num_targets,
-            None
-        )
+    print("=== 启动 AlphaGeometry 多核并发数据生成引擎 ===")
     
-    print(f"数据生成完成，当前索引已达{syn_data_index}")
+    # generate_data(
+    #     num_extra_clauses,
+    #     dof_chooser,
+    #     num_targets,
+    #     output_flag
+    # )
+
+    # ======================================================================================
+
+    num_cores = multiprocessing.cpu_count()
+    # 防止电脑完全卡死
+    workers = max(1, num_cores - 4) 
+    print(f"[*] 检测到系统 CPU 核心数: {num_cores}，已分配 {workers} 个并发 Worker 进程。")
+
+    # 有效图数量
+    total_graphs_to_generate = 12
+    
+    # 构建任务队列：(num_extra_clauses, num_targets, task_id)
+    tasks = [(num_extra_clauses, dof_chooser, num_targets, i) for i in range(total_graphs_to_generate)]
+
+    total_samples_saved = 0
+
+    # 开启进程池
+    with multiprocessing.Pool(processes = workers) as pool:
+        with open(file_path, 'a', encoding='utf-8') as f:
+            for i, result_batch in enumerate(pool.imap_unordered(worker_generate_single_graph, tasks)):
+                
+                # 集中落盘写入
+                for sample in result_batch:
+                    f.write(json.dumps(sample, ensure_ascii = False) + '\n')
+                
+                # 刷新缓冲区，防止程序意外中断时数据丢失
+                f.flush() 
+                
+                total_samples_saved += len(result_batch)
+                print(f"[*] 进度: 已处理图 {i+1}/{total_graphs_to_generate} | 本次新增样本: {len(result_batch)} | 总计收集样本: {total_samples_saved}")
+
+    print("========================================================")
+    print(f"大规模数据生成任务圆满完成！共计生成 {total_samples_saved} 条训练数据。")
+    print(f"数据已安全保存至: {file_path}")
+
 
 if __name__ == "__main__":
     main()
