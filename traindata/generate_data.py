@@ -210,11 +210,13 @@ def generate_random_premises(num_extra_clauses = 3, dof_chooser = 0.7):
     return f"synthetic_random_graph\n{premises_str}"
 
 
-def generate_data(num_extra_clauses = 5, dof_chooser = 0.7, file_path = None):
+def generate_data(syn_data_index, num_extra_clauses = 5, dof_chooser = 0.7, num_targets = 3, file_path = None):
     """
     生成合成几何数据
+    :param syn_data_index: 生成数据的索引
     :param num_extra_clauses: 额外添加的随机前提数量
     :param dof_chooser: 选择 0dof 作图的概率，剩余概率为 1dof 作图
+    :param num_targets: 随机选择以进行回溯的目标结论数量
     :param file_path: 可选参数，指定将生成的数据保存到哪个文件
     """
     output_flag = True
@@ -284,65 +286,95 @@ def generate_data(num_extra_clauses = 5, dof_chooser = 0.7, file_path = None):
                 print("[-] 初始条件太简单")
             return
 
-        target_dep = all_added[-1]
-        
-        # 提取原始逻辑链
-        try:
-            setup_raw, aux_raw, log_raw, setup_points = trace_back.get_logs(target_dep, g, merge_trivials=True)
-        except Exception as e:
-            if output_flag: print(f"[-] 回溯树构建异常 ({e})，丢弃该数据...")
-            continue
+        # target_dep = all_added[-1]
+        actual_num_targets = min(num_targets, len(all_added))
+        sampled_targets = random.sample(all_added, actual_num_targets)
+        valid_samples_for_this_graph = 0
+        if output_flag:
+            print(f"[*] 图构建与推导成功！从 {len(all_added)} 个新结论中随机抽取了 {actual_num_targets} 个作为求证目标。")
 
-        if file_path is not None and len(aux_raw) == 0:
-            print("[-] 没有辅助点，重新生成")
-            continue # 如果没有辅助构造点，则重新生成
-
-        if file_path is not None:
-            # 提取 DSL 格式的输入 (Input)
-            # 使用 pretty.pretty 函数将 Dependency 对象转回类似 "T a b c d" 的底层符号串
-            setup_dsl = [pretty.pretty([dep.name] + [a.name if hasattr(a, 'name') else str(a) for a in dep.args]) for dep in setup_raw]
-            
-            target_args = [a.name if hasattr(a, 'name') else str(a) for a in target_dep.args]
-            target_dsl = pretty.pretty([target_dep.name] + target_args)
-
-            # 提取 DSL 格式的标签 (Label - 辅助点)
-            aux_dsl = [pretty.pretty([dep.name] + [a.name if hasattr(a, 'name') else str(a) for a in dep.args]) for dep in aux_raw]
-
-            # 构建训练样本字典
-            training_sample = {
-                "problem_id": f"synthetic_{random.randint(10000, 99999)}",
-                "premises": setup_dsl,        # 模型输入 1
-                "target": target_dsl,         # 模型输入 2
-                "auxiliary_points": aux_dsl,  # 模型预测标签
-                "proof_length": len(log_raw)  # 元数据：可用于后续按难度过滤数据
-            }
-
-            #以追加模式 ('a') 写入 JSONL 文件
-            try:
-                with open(file_path, 'a', encoding='utf-8') as f:
-                    f.write(json.dumps(training_sample, ensure_ascii=False) + '\n')
-                # 写入成功后退出循环
-                break 
-            except Exception as e:
-                print(f"写入文件失败: {e}")
-                break
-        else:
+        for i, target_dep in enumerate(sampled_targets):
             if output_flag:
-                print("\n========================================================")
-                print("合成几何题生成完毕 (Synthetic Data Ready)")
-                print("========================================================")
+                print(f"\n--- 开始处理目标 {i+1}/{actual_num_targets} ---")
 
-            target_args = [a.name if hasattr(a, 'name') else str(a) for a in target_dep.args]
-            p.goal = problem.Construction(target_dep.name, target_args)
+            try:
+                # 借助 g.cache，即使处理多个目标，回溯速度也会越来越快
+                setup_raw, aux_raw, log_raw, setup_points = trace_back.get_logs(target_dep, g, merge_trivials=True)
+            except Exception as e:
+                if output_flag: print(f"  [-] 回溯树构建异常 ({e})，跳过该结论...")
+                continue
 
-            write_solution(g, p, "")
+            if file_path is not None and len(aux_raw) == 0:
+                if output_flag: print("  [-] 该结论无需辅助点即可证明，跳过...")
+                continue 
+
+            if file_path is not None:
+                setup_dsl = [pretty.pretty([dep.name] + [a.name if hasattr(a, 'name') else str(a) for a in dep.args]) for dep in setup_raw]
+                target_args = [a.name if hasattr(a, 'name') else str(a) for a in target_dep.args]
+                target_dsl = pretty.pretty([target_dep.name] + target_args)
+                aux_dsl = [pretty.pretty([dep.name] + [a.name if hasattr(a, 'name') else str(a) for a in dep.args]) for dep in aux_raw]
+
+                training_sample = {
+                    "problem_id": f"synthetic_{syn_data_index:06d}", # 加上后缀区分同源图
+                    "premises": setup_dsl,        
+                    "target": target_dsl,         
+                    "auxiliary_points": aux_dsl,  
+                    "proof_length": len(log_raw)  
+                }
+                syn_data_index += 1
+
+                try:
+                    with open(file_path, 'a', encoding='utf-8') as f:
+                        f.write(json.dumps(training_sample, ensure_ascii=False) + '\n')
+                    valid_samples_for_this_graph += 1
+                except Exception as e:
+                    print(f"写入文件失败: {e}")
+            else:
+                if output_flag:
+                    print("\n========================================================")
+                    print("合成几何题生成完毕 (Synthetic Data Ready)")
+                    print("========================================================")
+
+                # 终端模式展示
+                target_args = [a.name if hasattr(a, 'name') else str(a) for a in target_dep.args]
+                p.goal = problem.Construction(target_dep.name, target_args)
+
+                # 调用复刻的输出函数
+                write_solution(g, p, "")
+                graph.nm.draw(
+                    g.type2nodes[graph.Point],
+                    g.type2nodes[graph.Line],
+                    g.type2nodes[graph.Circle],
+                    g.type2nodes[graph.Segment])
+                valid_samples_for_this_graph += 1
+
+        if valid_samples_for_this_graph > 0:
+            if output_flag:
+                print(f"\n========================================================")
+                print(f"本轮测试结束，共成功展示了 {valid_samples_for_this_graph} 个包含证明链的结论。")
+                print(f"========================================================")
             break
+    return syn_data_index
 
 
 def main():
+    syn_data_index = 0
+    num_extra_clauses = 15
+    dof_chooser = 0.5
+    num_targets = 30
     file_path = os.path.join(PROJECT_ROOT, 'synthetic_data.jsonl')
-    generate_data(5, 0.7, None)
+    sum_syn_data = 1
 
+    while syn_data_index < sum_syn_data:
+        syn_data_index = generate_data(
+            syn_data_index,
+            num_extra_clauses,
+            dof_chooser,
+            num_targets,
+            None
+        )
+    
+    print(f"数据生成完成，当前索引已达{syn_data_index}")
 
 if __name__ == "__main__":
     main()

@@ -1,5 +1,0 @@
-{"problem_id": "synthetic_34311", "premises": ["C k b l", "D l b l k", "C o l j", "D o l o j", "C l p s", "D s l s p"], "target": "/ k b p j k l o s", "auxiliary_points": ["C r f m", "D r f r m"], "proof_length": 7}
-{"problem_id": "synthetic_70606", "premises": ["C c d b", "D d c d b", "T h e b d", "D i d i b", "^ d i d b b d b i", "C i d j", "D j i j d"], "target": "^ b j e h e h c i", "auxiliary_points": ["C p t f", "D t p t f"], "proof_length": 5}
-{"problem_id": "synthetic_83325", "premises": ["C b d a", "D d a d b", "C e d h", "D h e h d", "C d w v", "D w v w d"], "target": "/ b d w h b a e v", "auxiliary_points": ["C i s h", "D s h s i"], "proof_length": 7}
-{"problem_id": "synthetic_69285", "premises": ["C c b d", "C e b d", "D e d e b", "D h b h d", "^ e k e d d e d k"], "target": "^ e h d k e k e h", "auxiliary_points": ["T u r d b"], "proof_length": 3}
-{"problem_id": "synthetic_64950", "premises": ["C e a f", "D f e f a", "C b e i", "D i e i b", "C p j r", "D r j r p"], "target": "/ f i p r b a p j", "auxiliary_points": ["C d k a", "T e k a d"], "proof_length": 6}
