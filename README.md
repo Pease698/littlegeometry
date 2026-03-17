@@ -1,7 +1,7 @@
 
 # Before Read
 
-This repository is copied from alphageometry with some modified. You should have uv in your environment and use it to create a virtual environment to run this project. To better reproduce this project, DD and AR sections are put in reuse directory and the origin model is put in origin directory.
+This repository is copied from alphageometry with some modified. You should have uv in your environment and use it to create a virtual environment to run this project. To better reproduce this project, the origin model is put in origin directory, and new model will put in newmodel diectory.
 
 If it is the first time you run it, you can excute the following command:
 

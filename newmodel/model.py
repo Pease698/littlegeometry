@@ -11,10 +11,10 @@ def create_mini_geometry_model(vocab_size):
     # 定义模型配置
     config = GPT2Config(
         vocab_size = vocab_size,
-        n_positions = 128,       # 最大序列长度
-        n_embd = 128,            # 词向量的维度
-        n_layer = 4,             # Transformer 的层数
-        n_head = 4,              # 多头注意力的头数
+        n_positions = 160,       # 最大序列长度
+        n_embd = 256,            # 词向量的维度
+        n_layer = 6,             # Transformer 的层数
+        n_head = 8,              # 多头注意力的头数
         bos_token_id = 1,        # 序列开头，即 <bos> ID
         eos_token_id = 2,        # 序列结尾，即 <eos> ID
         pad_token_id = 0         # 序列填充，即 <pad> ID

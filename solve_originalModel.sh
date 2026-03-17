@@ -21,7 +21,7 @@ echo "====================================="
 # 配置路径和环境变量
 DATA=ag_ckpt_vocab
 MELIAD_PATH=meliad_lib/meliad
-export PYTHONPATH=$PYTHONPATH:$MELIAD_PATH:origin:reuse
+export PYTHONPATH=$PYTHONPATH:$MELIAD_PATH:origin:traindata:newmodel
 
 # 各种参数配置
 DDAR_ARGS=(--defs_file=$(pwd)/defs.txt --rules_file=$(pwd)/rules.txt)

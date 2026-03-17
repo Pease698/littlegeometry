@@ -5,19 +5,17 @@ import json
 import multiprocessing
 from absl import logging
 
-# 动态配置系统路径，确保能无缝调用 reuse 里的模块
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 sys.path.append(PROJECT_ROOT)
-sys.path.append(os.path.join(PROJECT_ROOT, 'reuse'))
 sys.path.append(os.path.join(PROJECT_ROOT, 'origin'))
 sys.path.append(os.path.join(PROJECT_ROOT, 'meliad_lib', 'meliad'))
 
-from reuse import problem
-from reuse import graph
-from reuse import ddar
-from reuse import trace_back
-from reuse import pretty
+import problem
+import graph
+import ddar
+import trace_back
+import pretty
 
 
 def proof_step_string(
@@ -413,7 +411,7 @@ def main():
     print(f"[*] 检测到系统 CPU 核心数: {num_cores}，已分配 {workers} 个并发 Worker 进程。")
 
     # 有效图数量
-    total_graphs_to_generate = 12
+    total_graphs_to_generate = 240
     
     # 构建任务队列：(num_extra_clauses, num_targets, task_id)
     tasks = [(num_extra_clauses, dof_chooser, num_targets, activation_threshold, i) for i in range(total_graphs_to_generate)]

@@ -23,11 +23,11 @@ import traceback
 from absl import app
 from absl import flags
 from absl import logging
-from reuse import ddar
-from reuse import graph as gh
+import ddar
+import graph as gh
 from origin import lm_inference as lm
-from reuse import pretty as pt
-from reuse import problem as pr
+import pretty as pt
+import problem as pr
 
 
 _GIN_SEARCH_PATHS = flags.DEFINE_list(

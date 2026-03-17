@@ -1,0 +1,28 @@
+
+==========================
+ * Proof steps:
+001. B,H,C are collinear [02] & HB = HC [03] ⇒ H is midpoint of BC [14]
+002. I,A,C are collinear [04] & IC = IA [05] ⇒ I is midpoint of CA [15]
+003. H is midpoint of BC [14] & I is midpoint of CA [15] ⇒ HI ∥ BA [16]
+004. HI ∥ AB [16] & H,A,K are collinear [06] & B,I,K are collinear [07] ⇒ HI:HK = BA:AK [17]
+005. B,A,J are collinear [12] & JA = JB [13] ⇒ J is midpoint of BA [18]
+006. I is midpoint of CA [15] & J is midpoint of BA [18] ⇒ IJ ∥ CB [19]
+007. I,A,C are collinear [04] & B,H,C are collinear [02] & BC ∥ IJ [19] ⇒ ∠JIA = ∠HCI [20]
+008. B,A,J are collinear [12] & I,A,C are collinear [04] & AB ∥ HI [16] ⇒ ∠JAI = ∠HIC [21]
+009. ∠JIA = ∠HCI [20] & ∠JAI = ∠HIC [21] ⇒ AI:IC = AJ:IH [22]
+010. CA ⟂ FB [10] & BD ⟂ AC [00] & A,F,C are collinear [11] ⇒ BF ⟂ FA [23]
+011. BF ⟂ FA [23] & J is midpoint of BA [18] ⇒ BJ = FJ [24]
+012. HI:HK = BA:AK [17] & AI:IC = AJ:IH [22] & IC = IA [05] & JA = JB [13] & BJ = FJ [24] ⇒ JF:HK = BA:AK [25]
+013. HB = HC [03] & LB = LC [08] ⇒ BC ⟂ HL [26]
+014. LA = LB [09] & LB = LC [08] ⇒ LC = LA [27]
+015. IC = IA [05] & LC = LA [27] ⇒ AC ⟂ IL [28]
+016. BC ⟂ HL [26] & AD ⟂ BC [01] & AC ⟂ IL [28] & BD ⟂ AC [00] ⇒ ∠ADB = ∠HLI [29]
+017. AC ⟂ IL [28] & BD ⟂ AC [00] & AB ∥ HI [16] ⇒ ∠ABD = ∠HIL [30]
+018. ∠ADB = ∠HLI [29] & ∠ABD = ∠HIL [30] ⇒ BA:AD = HI:HL [31]
+019. HI:HL = BA:AD [31] & AI:IC = AJ:IH [22] & IC = IA [05] & JA = JB [13] & BJ = FJ [24] ⇒ JF:HL = BA:AD [32]
+020. JF:HK = BA:AK [25] & JF:HL = BA:AD [32] ⇒ AK:AD = HK:HL [33]
+021. H,A,K are collinear [06] & BC ⟂ HL [26] & AD ⟂ BC [01] ⇒ ∠KHL = ∠KAD [34]
+022. AK:AD = HK:HL [33] & ∠KHL = ∠KAD [34] ⇒ ∠HKL = ∠AKD [35]
+023. ∠HKL = ∠AKD [35] & H,A,K are collinear [06] ⇒ KL ∥ DK [36]
+024. KL ∥ DK [36] ⇒ L,K,D are collinear
+==========================

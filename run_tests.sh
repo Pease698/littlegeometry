@@ -15,16 +15,16 @@
 
 DATA=ag_ckpt_vocab
 MELIAD_PATH=meliad_lib/meliad
-export PYTHONPATH=$PYTHONPATH:$MELIAD_PATH:origin:reuse
+export PYTHONPATH=$PYTHONPATH:$MELIAD_PATH:origin:traindata:newmodel
 
-uv run python reuse/problem_test.py
-uv run python reuse/geometry_test.py
-uv run python reuse/graph_utils_test.py
-uv run python reuse/numericals_test.py
-uv run python reuse/graph_test.py
-uv run python reuse/dd_test.py
-uv run python reuse/ar_test.py
-uv run python reuse/ddar_test.py
-uv run python reuse/trace_back_test.py
+uv run python problem_test.py
+uv run python geometry_test.py
+uv run python graph_utils_test.py
+uv run python numericals_test.py
+uv run python graph_test.py
+uv run python dd_test.py
+uv run python ar_test.py
+uv run python ddar_test.py
+uv run python trace_back_test.py
 uv run python alphageometry_test.py
 uv run python origin/lm_inference_test.py --meliad_path=$MELIAD_PATH --data_path=$DATA

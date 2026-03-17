@@ -61,6 +61,6 @@ def analyze_sequence_lengths(jsonl_path):
     plt.show()
 
 if __name__ == "__main__":
-    data_path = "traindata/test_data.jsonl"
+    data_path = "traindata/synthetic_data.jsonl"
     analyze_sequence_lengths(data_path)
 
