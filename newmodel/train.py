@@ -61,7 +61,7 @@ def train():
         train_pbar = tqdm(train_loader, desc=f"Epoch {epoch+1:02d}/{num_epochs} [Train]",
                           leave=False, ncols=100)  # 进度条不会占用多行
         
-        for batch in train_loader:
+        for batch in train_pbar:
             input_ids = batch["input_ids"].to(device)
             labels = batch["labels"].to(device)
             attention_mask = (input_ids != pad_id).long().to(device)
@@ -86,7 +86,7 @@ def train():
                         leave=False, ncols=100)
         
         with torch.no_grad():
-            for batch in val_loader:
+            for batch in val_pbar:
                 input_ids = batch["input_ids"].to(device)
                 labels = batch["labels"].to(device)
                 attention_mask = (input_ids != pad_id).long().to(device)
