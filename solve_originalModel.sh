@@ -1,17 +1,8 @@
 #!/bin/bash
 set -e
 
-# 检查是否至少输入了题目名称 ($1)
-if [ -z "$1" ]; then
-  echo "用法: bash solve.sh <题目名称> [题目文件.txt]"
-  echo "示例 1 (默认读取 examples.txt): bash solve.sh orthocenter"
-  echo "示例 2 (读取自定义文本): bash solve.sh my_problem custom_problems.txt"
-  exit 1
-fi
-
-PROBLEM_NAME=$1
-# 获取第二个参数 ($2)，如果为空，则默认赋值为 "examples.txt"
-PROBLEMS_FILE=${2:-examples.txt}
+PROBLEM_NAME="translated_imo_2004_p1"
+PROBLEMS_FILE="imp_ag_30.txt"
 
 echo "====================================="
 echo "正在尝试求解几何题: $PROBLEM_NAME"

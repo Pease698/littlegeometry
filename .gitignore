@@ -29,3 +29,4 @@ ag_ckpt_vocab/
 
 traindata/*.jsonl
 mini_ag_weights/
+results/

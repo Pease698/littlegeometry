@@ -346,6 +346,25 @@ class BeamQueue:
     def __iter__(self): return iter(self.queue)
     def __len__(self): return len(self.queue)
 
+def format_lm_prediction(raw_str: str) -> str:
+    """
+    将模型输出的脏字符串清洗为 DeepMind 严格要求的标准格式
+    例如: "j : C c j g ; <pad>" -> "j : C c j g ;"
+    例如: "m : C m b g" -> "m : C m b g ;"
+    """
+    # 1. 移除模型可能吐出的各种特殊 Token
+    clean_str = raw_str.replace("<pad>", "").replace("<eos>", "").replace("<bos>", "").strip()
+    
+    # 2. 如果字符串已经自带分号，先把它剥离掉，防止出现多个分号或没有空格的情况
+    if clean_str.endswith(";"):
+        clean_str = clean_str[:-1].strip()
+        
+    # 3. 只要剥离后还有内容，我们就给它穿上标准的“制服”（加个空格和分号）
+    if clean_str:
+        clean_str = clean_str + " ;"
+        
+    return clean_str
+
 # ==============================================================================
 # 修改后的主循环: run_alphageometry
 # ==============================================================================
@@ -373,11 +392,14 @@ def run_alphageometry(model, tokenizer, device, p: pr.Problem, search_depth: int
             
             # 遍历模型给出的几个建议
             for lm_out, score in candidates:
+                cleaned_out = format_lm_prediction(lm_out)
+
                 logging.info(f'模型建议 (得分 {score:.2f}): "{lm_out}"')
                 
-                translation = try_translate_constrained_to_construct(lm_out, g)
+                translation = try_translate_constrained_to_construct(cleaned_out, g)
                 if translation.startswith('ERROR:'):
-                    continue
+                  logging.info(f"被引擎拒绝: {translation}")
+                  continue
                 
                 # 将辅助点加入到题目已知条件中
                 candidate_pstring = insert_aux_to_premise(pstring, translation)
