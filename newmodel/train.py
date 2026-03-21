@@ -27,8 +27,8 @@ def train():
     train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
     print(f"训练集 {train_size} 条, 验证集 {val_size} 条")
 
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=48, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=48, shuffle=False)
 
     # 实例化模型并移动到计算设备上
     model = create_mini_geometry_model(vocab_size)
@@ -42,8 +42,7 @@ def train():
         optimizer,
         mode='min',         # 监控的指标越小越好
         factor=0.5,         # 学习率衰减因子
-        patience=2,         # 容忍多少个 epoch 验证损失不下降
-        verbose=True        # 打印学习率更新信息
+        patience=2          # 容忍多少个 epoch 验证损失不下降
     )
 
     # ================= 开始训练 =================
