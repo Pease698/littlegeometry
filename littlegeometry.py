@@ -31,7 +31,7 @@ def load_mini_ag_model(model_dir):
     """加载我们自己的 PyTorch 模型和分词器"""
     logging.info("正在加载自定义的 Mini-AlphaGeometry 模型...")
     tokenizer = GeometryTokenizer()
-    tokenizer.build_vocab_from_jsonl("traindata/synthetic_data_v2.jsonl") 
+    tokenizer.build_vocab_from_jsonl("traindata/synthetic_data_v3.jsonl") 
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = GPT2LMHeadModel.from_pretrained(model_dir).to(device)

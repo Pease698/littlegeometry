@@ -11,7 +11,7 @@ def create_mini_geometry_model(vocab_size):
     # 定义模型配置
     config = GPT2Config(
         vocab_size = vocab_size,
-        n_positions = 196,       # 最大序列长度
+        n_positions = 256,       # 最大序列长度
         n_embd = 256,            # 词向量的维度
         n_layer = 16,             # Transformer 的层数
         n_head = 16,              # 多头注意力的头数

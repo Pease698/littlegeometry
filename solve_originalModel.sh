@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-PROBLEM_NAME="translated_imo_2004_p1"
-PROBLEMS_FILE="imp_ag_30.txt"
+PROBLEM_NAME="examples/complete2/012/complete_004_6_GDD_FULL_81-109_94.gex"
+PROBLEMS_FILE="jgex_ag_231.txt"
 
 echo "====================================="
 echo "正在尝试求解几何题: $PROBLEM_NAME"

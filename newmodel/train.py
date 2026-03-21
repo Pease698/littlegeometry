@@ -13,7 +13,7 @@ def train():
     print(f"当前使用的计算设备: {device}")
 
     # 准备基础组件
-    data_path = "traindata/synthetic_data_v2.jsonl"
+    data_path = "traindata/synthetic_data_v3.jsonl"
     tokenizer = GeometryTokenizer()
     tokenizer.build_vocab_from_jsonl(data_path)
     vocab_size = len(tokenizer.vocab)
@@ -22,7 +22,7 @@ def train():
     full_dataset = GeometryDataset(data_path, tokenizer, max_length = 196)
 
     total_size = len(full_dataset)
-    val_size = 40  # 进行模型验证
+    val_size = total_size // 10  # 进行模型验证
     train_size = total_size - val_size
     train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
     print(f"训练集 {train_size} 条, 验证集 {val_size} 条")
@@ -34,16 +34,16 @@ def train():
     model = create_mini_geometry_model(vocab_size)
     model.to(device)
 
-    # 定义优化器 AdamW，学习率为 3e-4
-    optimizer = AdamW(model.parameters(), lr=3e-4, weight_decay=0.001)
+    # 定义优化器 AdamW，学习率为 1e-4
+    optimizer = AdamW(model.parameters(), lr=1e-4, weight_decay=0.001)
 
     # 学习率调度器：当验证损失不再下降时，降低学习率
     scheduler = ReduceLROnPlateau(
         optimizer,
-        mode='min',          # 监控的指标越小越好
-        factor=0.5,           # 学习率衰减因子
-        patience=2,           # 容忍多少个 epoch 验证损失不下降
-        verbose=True          # 打印学习率更新信息
+        mode='min',         # 监控的指标越小越好
+        factor=0.5,         # 学习率衰减因子
+        patience=2,         # 容忍多少个 epoch 验证损失不下降
+        verbose=True        # 打印学习率更新信息
     )
 
     # ================= 开始训练 =================
