@@ -219,6 +219,92 @@ def generate_random_premises(num_extra_clauses = 3, dof_chooser = 0.7):
     return f"synthetic_random_graph\n{premises_str}"
 
 
+def check_provable(test_setup_dsl_list, target_dsl, definitions, theorems):
+    """
+    测试在给定的前提集下，能否推导出目标结论
+    """
+    # 组装 DSL 文本
+    test_premises_str = "synthetic_test_graph\n" + "; ".join(test_setup_dsl_list)
+    
+    try:
+        # 重新解析为 Problem 对象
+        p_test = problem.Problem.from_txt(test_premises_str, translate=True)
+        
+        target_name = target_dsl.split()[0]
+        target_args = target_dsl.split()[1:]
+        p_test.goal = problem.Construction(target_name, target_args)
+        
+        # 重新建图
+        g_test, _ = graph.Graph.build_problem(p_test, definitions, verbose=False)
+        
+        # 运行符号推导
+        g_test, _, status, _, all_added_test = ddar.solve(
+            g_test, theorems, controller=p_test, max_level=1000, timeout=10
+        )
+        
+        # 寻找是否生成了目标结论
+        target_dep_test = None
+        for dep in all_added_test:
+            dep_dsl = pretty.pretty([dep.name] + [a.name if hasattr(a, 'name') else str(a) for a in dep.args])
+            if dep_dsl == target_dsl:
+                target_dep_test = dep
+                break
+                
+        if target_dep_test is not None:
+            try:
+                _, _, log_raw_test, _ = trace_back.get_logs(target_dep_test, g_test, merge_trivials=True)
+                return True, len(log_raw_test)
+            except Exception:
+                return True, -1
+                
+        return False, -1
+        
+    except Exception as e:
+        return False, -1
+
+
+def prune_redundant_premises_and_aux(setup_dsl_list, aux_dsl_list, target_dsl, definitions, theorems, original_proof_length):
+    """
+    联合修剪：将推导前提和辅助构造放在一起进行极小化操作。
+    返回值增加了一项：最新的推导长度。
+    """
+    print("  [*] 开始联合修剪前提和辅助构造...")
+    full_premises = setup_dsl_list + aux_dsl_list
+    pruned_premises = list(full_premises)
+    length  = len(pruned_premises)   
+    
+    original_setup_set = set(setup_dsl_list)
+    original_aux_set = set(aux_dsl_list)
+    
+    current_proof_length = original_proof_length
+
+    for i in range(length - 1, 0, -1):
+        candidate_to_remove = pruned_premises[i]
+        
+        test_setup = pruned_premises[:i] + pruned_premises[i+1:]
+        
+        is_provable, new_length = check_provable(test_setup, target_dsl, definitions, theorems)
+        
+        if is_provable:
+            # 剪枝成功
+            pruned_premises = test_setup
+            print(f"  [+] 成功修剪掉冗余前提: {candidate_to_remove}")
+            if new_length != -1:
+                current_proof_length = new_length
+
+    # 拆分还原
+    min_setup_dsl = []
+    min_aux_dsl = []
+    
+    for premise in pruned_premises:
+        if premise in original_setup_set:
+            min_setup_dsl.append(premise)
+        elif premise in original_aux_set:
+            min_aux_dsl.append(premise)
+            
+    return min_setup_dsl, min_aux_dsl, current_proof_length
+
+
 def generate_data(num_extra_clauses = 5, dof_chooser = 0.7, num_targets = 3, output_flag = True):
     """
     生成合成几何数据
@@ -371,18 +457,24 @@ def worker_generate_single_graph(args):
             elif random.randint(1, activation_threshold) > len(log_raw):
                 continue
 
-
             setup_dsl = [pretty.pretty([dep.name] + [a.name if hasattr(a, 'name') else str(a) for a in dep.args]) for dep in setup_raw]
             target_args = [a.name if hasattr(a, 'name') else str(a) for a in target_dep.args]
             target_dsl = pretty.pretty([target_dep.name] + target_args)
             aux_dsl = [pretty.pretty([dep.name] + [a.name if hasattr(a, 'name') else str(a) for a in dep.args]) for dep in aux_raw]
 
+            min_setup_dsl, min_aux_dsl, final_proof_length = prune_redundant_premises_and_aux(
+                setup_dsl, aux_dsl, target_dsl, definitions, theorems, original_proof_length=len(log_raw)
+            )
+
+            if (len(min_aux_dsl) == 0):
+                continue
+
             training_sample = {
                 "problem_id": f"synthetic_{task_id}_{random.randint(0, 99999):05d}_{i}",
-                "premises": setup_dsl,        
+                "premises": min_setup_dsl,
                 "target": target_dsl,         
-                "auxiliary_points": aux_dsl,  
-                "proof_length": len(log_raw)  
+                "auxiliary_points": min_aux_dsl,  
+                "proof_length": final_proof_length  
             }
             results.append(training_sample)
 
@@ -392,55 +484,55 @@ def worker_generate_single_graph(args):
 
 
 def main():
-    num_extra_clauses = 10
+    num_extra_clauses = 20
     dof_chooser = 0
-    num_targets = 50
+    num_targets = 10
     output_flag = True
     activation_threshold = 12
     file_path = os.path.join(PROJECT_ROOT, 'traindata/test_data.jsonl')
 
     print("=== 启动 AlphaGeometry 多核并发数据生成引擎 ===")
     
-    generate_data(
-        num_extra_clauses,
-        dof_chooser,
-        num_targets,
-        output_flag
-    )
+    # generate_data(
+    #     num_extra_clauses,
+    #     dof_chooser,
+    #     num_targets,
+    #     output_flag
+    # )
 
     # ======================================================================================
 
-    # num_cores = multiprocessing.cpu_count()
-    # # 防止电脑完全卡死
-    # workers = max(1, num_cores - 4) 
-    # print(f"[*] 检测到系统 CPU 核心数: {num_cores}，已分配 {workers} 个并发 Worker 进程。")
+    num_cores = multiprocessing.cpu_count()
+    # 防止电脑完全卡死
+    workers = max(1, num_cores - 4) 
+    print(f"[*] 检测到系统 CPU 核心数: {num_cores}，已分配 {workers} 个并发 Worker 进程。")
 
-    # # 有效图数量
-    # total_graphs_to_generate = 240
+    # 有效图数量
+    total_graphs_to_generate = 12
     
-    # # 构建任务队列：(num_extra_clauses, num_targets, task_id)
-    # tasks = [(num_extra_clauses, dof_chooser, num_targets, activation_threshold, i) for i in range(total_graphs_to_generate)]
+    # 构建任务队列：(num_extra_clauses, num_targets, task_id)
+    tasks = [(num_extra_clauses, dof_chooser, num_targets, activation_threshold, i) for i in range(total_graphs_to_generate)]
 
-    # total_samples_saved = 0
+    total_samples_saved = 0
 
-    # # 开启进程池
-    # with multiprocessing.Pool(processes = workers) as pool:
-    #     with open(file_path, 'a', encoding='utf-8') as f:
-    #         for i, result_batch in enumerate(pool.imap_unordered(worker_generate_single_graph, tasks)):
-    #             
-    #             # 集中落盘写入
-    #             for sample in result_batch:
-    #                 f.write(json.dumps(sample, ensure_ascii = False) + '\n')
-    #             
-    #             # 刷新缓冲区，防止程序意外中断时数据丢失
-    #             f.flush() 
-    #             
-    #             total_samples_saved += len(result_batch)
-    #             print(f"[*] 进度: 已处理图 {i+1}/{total_graphs_to_generate} | 本次新增样本: {len(result_batch)} | 总计收集样本: {total_samples_saved}")
+    # 开启进程池
+    with multiprocessing.Pool(processes = workers) as pool:
+        with open(file_path, 'a', encoding='utf-8') as f:
+            for i, result_batch in enumerate(pool.imap_unordered(worker_generate_single_graph, tasks)):
+                
+                # 集中落盘写入
+                for sample in result_batch:
+                    f.write(json.dumps(sample, ensure_ascii = False) + '\n')
+                
+                # 刷新缓冲区，防止程序意外中断时数据丢失
+                f.flush() 
+                
+                total_samples_saved += len(result_batch)
+                print(f"[*] 进度: 已处理图 {i+1}/{total_graphs_to_generate} | 本次新增样本: {len(result_batch)} | 总计收集样本: {total_samples_saved}")
 
-    # print("========================================================")
-    # print(f"大规模数据生成任务圆满完成！共计生成 {total_samples_saved} 条训练数据。")
-    # print(f"数据已安全保存至: {file_path}")
+    print("========================================================")
+    print(f"大规模数据生成任务圆满完成！共计生成 {total_samples_saved} 条训练数据。")
+    print(f"数据已安全保存至: {file_path}")
 
 
 if __name__ == "__main__":
